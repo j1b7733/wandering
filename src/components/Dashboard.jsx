@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useOuting } from '../hooks/useOuting';
 import NoteTaker from './NoteTaker';
 import VoiceRecorder from './VoiceRecorder';
@@ -18,6 +18,7 @@ const formatTime = (totalSeconds) => {
 };
 
 export default function Dashboard({ outing }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const {
     isTracking,
     duration,
@@ -35,7 +36,30 @@ export default function Dashboard({ outing }) {
 
   return (
     <div className="dashboard-container" style={{ padding: '24px', maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-      <header style={{ marginBottom: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <header style={{ position: 'relative', marginBottom: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        
+        {isTracking && (
+          <button 
+            onClick={() => setMenuOpen(!menuOpen)}
+            style={{ position: 'absolute', top: '0', right: '0', background: 'none', border: 'none', color: 'var(--text-primary)', fontSize: '2.5rem', cursor: 'pointer', zIndex: 10, outline: 'none' }}
+            title="Menu"
+          >
+            ☰
+          </button>
+        )}
+
+        {menuOpen && isTracking && (
+          <div className="glass-panel animate-fade-in" style={{ position: 'absolute', top: '50px', right: '0', padding: '16px', zIndex: 11, display: 'flex', flexDirection: 'column', minWidth: '150px' }}>
+            <button 
+                className="btn btn-danger" 
+                onClick={() => { setMenuOpen(false); stopOuting(); }}
+                style={{ padding: '12px', fontSize: '1rem', width: '100%', borderRadius: 'var(--radius-md)' }}
+            >
+                🛑 Stop Outing
+            </button>
+          </div>
+        )}
+
         <img src="/logo.png" alt="Wandering Hillbilly Logo" style={{ width: '80px', height: '80px', marginBottom: '16px', filter: 'invert(1) drop-shadow(0 0 10px rgba(43,212,130,0.5))' }} className="animate-fade-in" />
         <h1 className="animate-fade-in" style={{ color: 'var(--accent-primary)', fontSize: '2.5rem', marginBottom: '8px' }}>
           Wandering Hillbilly
@@ -70,13 +94,6 @@ export default function Dashboard({ outing }) {
                 <VoiceRecorder onSave={addRecording} onSaveNote={addNote} />
                 <PhotoTaker onSave={addPhoto} />
               </div>
-              <button 
-                className="btn btn-danger" 
-                onClick={stopOuting}
-                style={{ width: '100%', padding: '20px', fontSize: '1.2rem', borderRadius: 'var(--radius-lg)' }}
-              >
-                Stop Outing
-              </button>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

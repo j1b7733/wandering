@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
 
 export default function VoiceRecorder({ onSave, onSaveNote }) {
+  const [isOpen, setIsOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [hasRecorded, setHasRecorded] = useState(false);
   const [transcribedText, setTranscribedText] = useState('');
   
   const mediaRecorderRef = useRef(null);
@@ -10,11 +11,27 @@ export default function VoiceRecorder({ onSave, onSaveNote }) {
   const chunksRef = useRef([]);
   const pendingBlobRef = useRef(null);
 
-  const startRecording = async () => {
+  const openRecorder = () => {
+      setIsOpen(true);
+      setHasRecorded(false);
+      setIsRecording(false);
+      setTranscribedText('');
+      pendingBlobRef.current = null;
+  };
+
+  const closeRecorder = () => {
+      stopRecordingProcess();
+      setIsOpen(false);
+      setHasRecorded(false);
+      setIsRecording(false);
+      setTranscribedText('');
+      pendingBlobRef.current = null;
+  };
+
+  const startRecordingProcess = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      // Setup audio blob recording
       mediaRecorderRef.current = new MediaRecorder(stream);
       mediaRecorderRef.current.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
@@ -23,10 +40,9 @@ export default function VoiceRecorder({ onSave, onSaveNote }) {
       mediaRecorderRef.current.onstop = () => {
         pendingBlobRef.current = new Blob(chunksRef.current, { type: 'audio/webm' });
         chunksRef.current = [];
-        setModalOpen(true);
+        setHasRecorded(true);
       };
 
-      // Setup Speech Recognition
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (SpeechRecognition) {
           recognitionRef.current = new SpeechRecognition();
@@ -42,7 +58,7 @@ export default function VoiceRecorder({ onSave, onSaveNote }) {
                   }
               }
               if (finalTranscript) {
-                  setTranscribedText(prev => prev + ' ' + finalTranscript);
+                  setTranscribedText(prev => (prev + ' ' + finalTranscript).trim());
               }
           };
           recognitionRef.current.start();
@@ -52,13 +68,14 @@ export default function VoiceRecorder({ onSave, onSaveNote }) {
 
       mediaRecorderRef.current.start();
       setIsRecording(true);
+      setHasRecorded(false);
     } catch (err) {
       console.error("Microphone access denied or error:", err);
       alert("Microphone access is needed to record audio.");
     }
   };
 
-  const stopRecording = () => {
+  const stopRecordingProcess = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
@@ -70,12 +87,10 @@ export default function VoiceRecorder({ onSave, onSaveNote }) {
   };
 
   const handleSaveOption = async (option) => {
-      // option: 'audio', 'text', 'both'
       const trimmedText = transcribedText.trim();
       const hasText = trimmedText.length > 0 && !trimmedText.startsWith("[Speech");
 
       if (option === 'audio' || option === 'both') {
-          // If 'both', attach transcription to the audio object so PastOuting can show it below play button
           const extraInfo = (option === 'both' && hasText) ? trimmedText : null;
           await onSave(pendingBlobRef.current, extraInfo);
       }
@@ -84,48 +99,77 @@ export default function VoiceRecorder({ onSave, onSaveNote }) {
           await onSaveNote(trimmedText);
       }
 
-      setModalOpen(false);
-      setTranscribedText('');
-      pendingBlobRef.current = null;
+      closeRecorder();
   };
 
-  if (modalOpen) {
+  if (isOpen) {
       return (
-          <div className="glass-panel animate-fade-in" style={{ padding: '16px', marginTop: '16px', textAlign: 'left', gridColumn: 'span 2' }}>
-            <h3 style={{ marginBottom: '12px' }}>Save Voice Memo</h3>
-            <div style={{ marginBottom: '16px', background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: 'var(--radius-sm)', fontSize: '0.9rem', minHeight: '60px'}}>
-                <strong>Transcription:</strong> {transcribedText || 'Listening...'}
-            </div>
-            <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
-                <button className="btn btn-primary" onClick={() => handleSaveOption('both')}>Save Audio + Text</button>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                    <button className="btn btn-secondary" onClick={() => handleSaveOption('audio')} style={{ flex: 1 }}>Audio Only</button>
-                    <button className="btn btn-secondary" onClick={() => handleSaveOption('text')} style={{ flex: 1 }} disabled={!transcribedText.trim()}>Text Only</button>
-                </div>
-                <button className="btn btn-danger" onClick={() => { setModalOpen(false); pendingBlobRef.current = null; }}>Discard</button>
-            </div>
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'var(--bg-primary)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: '24px', boxSizing: 'border-box' }}>
+              <h2 style={{ textAlign: 'center', marginBottom: '24px', color: 'var(--accent-primary)' }}>Voice Memo</h2>
+              
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                 {!isRecording && !hasRecorded && (
+                     <div style={{ textAlign: 'center' }}>
+                         <p style={{ color: 'var(--text-secondary)', marginBottom: '32px' }}>Press start to record and transcribe audio.</p>
+                         <button className="btn btn-primary" onClick={startRecordingProcess} style={{ padding: '24px', fontSize: '1.2rem', borderRadius: '50%', width: '120px', height: '120px' }}>
+                             🎤 Start
+                         </button>
+                     </div>
+                 )}
+
+                 {isRecording && (
+                     <div style={{ textAlign: 'center' }}>
+                         <div style={{ animation: 'pulse 1.5s infinite', background: 'rgba(244, 63, 94, 0.2)', width: '140px', height: '140px', borderRadius: '50%', margin: '0 auto 32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <button className="btn btn-danger" onClick={stopRecordingProcess} style={{ padding: '24px', fontSize: '1.2rem', borderRadius: '50%', width: '100px', height: '100px' }}>
+                                ⏹️ Stop
+                            </button>
+                         </div>
+                         <div style={{ background: 'rgba(0,0,0,0.3)', padding: '16px', borderRadius: 'var(--radius-md)', minHeight: '100px', textAlign: 'left' }}>
+                             <span style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>Recording...</span><br/>
+                             {transcribedText}
+                         </div>
+                     </div>
+                 )}
+
+                 {hasRecorded && !isRecording && (
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                         <div style={{ background: 'rgba(0,0,0,0.3)', padding: '16px', borderRadius: 'var(--radius-md)', minHeight: '100px', textAlign: 'left', marginBottom: '16px' }}>
+                             <strong>Transcription:</strong><br/>
+                             {transcribedText || 'No text detected.'}
+                         </div>
+                         <button className="btn btn-primary" onClick={() => handleSaveOption('both')} style={{ padding: '16px', fontSize: '1.1rem' }}>Save Audio + Text</button>
+                         <button className="btn btn-secondary" onClick={() => handleSaveOption('audio')} style={{ padding: '16px', fontSize: '1.1rem' }}>Save Audio Only</button>
+                         <button className="btn btn-secondary" onClick={() => handleSaveOption('text')} disabled={!transcribedText.trim()} style={{ padding: '16px', fontSize: '1.1rem' }}>Save Text Only</button>
+                     </div>
+                 )}
+              </div>
+
+              <div style={{ marginTop: 'auto', paddingTop: '24px' }}>
+                  <button className="btn btn-danger" onClick={closeRecorder} style={{ width: '100%', padding: '16px', fontSize: '1.1rem' }}>
+                      Cancel / Close
+                  </button>
+              </div>
+
+              <style>
+                  {`
+                    @keyframes pulse {
+                      0% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.4); }
+                      70% { box-shadow: 0 0 0 20px rgba(244, 63, 94, 0); }
+                      100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
+                    }
+                  `}
+              </style>
           </div>
       );
   }
 
   return (
     <button 
-      className={isRecording ? "btn btn-danger" : "btn btn-secondary"} 
-      onClick={isRecording ? stopRecording : startRecording}
-      style={{ padding: '16px', fontSize: '1.1rem', flex: 1, animation: isRecording ? 'pulse 2s infinite' : 'none' }}
+      className="btn btn-secondary" 
+      onClick={openRecorder}
+      style={{ padding: '16px', fontSize: '1.1rem', flex: 1 }}
     >
-      {isRecording ? '⏹️ Stop Recording' : '🎤 Record Voice'}
-      {isRecording && (
-        <style>
-          {`
-            @keyframes pulse {
-              0% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.4); }
-              70% { box-shadow: 0 0 0 10px rgba(244, 63, 94, 0); }
-              100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
-            }
-          `}
-        </style>
-      )}
+      🎤 Voice Memo
     </button>
   );
 }

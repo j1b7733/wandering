@@ -28,7 +28,7 @@ export async function saveOuting(outingData) {
 export async function getAllOutingsSummary() {
   const db = await initDB();
   const outings = await db.getAllFromIndex(STORE_NAME, 'date');
-  // Strip heavy tracks/recordings for the list view to load fast
+  // Strip heavy tracks/recordings/photos for the list view to load fast
   return outings.map(o => ({
     id: o.id,
     startTime: o.startTime,
@@ -36,7 +36,8 @@ export async function getAllOutingsSummary() {
     totalDistance: o.totalDistance,
     trackCount: o.tracks?.length || 0,
     noteCount: o.notes?.length || 0,
-    recCount: o.recordings?.length || 0
+    recCount: o.recordings?.length || 0,
+    photoCount: o.photos?.length || 0
   })).reverse(); // Newest first
 }
 
