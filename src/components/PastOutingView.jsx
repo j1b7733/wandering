@@ -103,7 +103,7 @@ export default function PastOutingView({ outingId, onBack, onResume }) {
         <div className="glass-panel animate-fade-in" style={{ padding: '24px', marginBottom: '24px', animationDelay: '0.2s', opacity: 0, animationFillMode: 'forwards' }}>
             <h3 style={{ marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>🎤 Voice Memos</h3>
             <audio ref={audioRef} style={{ display: 'none' }} controls />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {outing.recordings.map(rec => (
                     <button 
                         key={rec.id} 
@@ -115,6 +115,27 @@ export default function PastOutingView({ outingId, onBack, onResume }) {
                         <span>▶️ Play</span>
                         {rec.transcription && <div style={{ width: '100%', textAlign: 'left', marginTop: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)', whiteSpace: 'normal'}}>{rec.transcription}</div>}
                     </button>
+                ))}
+            </div>
+        </div>
+      )}
+
+      {(outing.photos && outing.photos.length > 0) && (
+        <div className="glass-panel animate-fade-in" style={{ padding: '24px', marginBottom: '80px', animationDelay: '0.3s', opacity: 0, animationFillMode: 'forwards' }}>
+            <h3 style={{ marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>📸 Photos</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '16px' }}>
+                {outing.photos.map(photo => (
+                    <div key={photo.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '8px', borderRadius: 'var(--radius-sm)' }}>
+                        <img 
+                            src={photo.dataUrl || photo.data} 
+                            alt={photo.text || "Outing photo"} 
+                            style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: 'var(--radius-sm)' }}
+                        />
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            {new Date(photo.timestamp).toLocaleTimeString()}
+                        </div>
+                        {photo.text && <div style={{ fontSize: '0.9rem' }}>{photo.text}</div>}
+                    </div>
                 ))}
             </div>
         </div>

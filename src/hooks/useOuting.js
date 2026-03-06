@@ -16,6 +16,18 @@ export function useOuting() {
   const [generalNote, setGeneralNote] = useState('');
   const [locationName, setLocationName] = useState(null);
 
+  // Refs for autosave to prevent stale closures
+  const tracksRef = useRef([]);
+  const notesRef = useRef([]);
+  const recordingsRef = useRef([]);
+  const photosRef = useRef([]);
+  
+  // Keep refs in sync with state for the autosave function
+  useEffect(() => { tracksRef.current = tracks; }, [tracks]);
+  useEffect(() => { notesRef.current = notes; }, [notes]);
+  useEffect(() => { recordingsRef.current = recordings; }, [recordings]);
+  useEffect(() => { photosRef.current = photos; }, [photos]);
+
   const trackingIntervalRef = useRef(null);
 
   // Recalculate distance when tracks change
@@ -62,10 +74,10 @@ export function useOuting() {
             endTime: Date.now(),
             duration: currentDuration,
             totalDistance,
-            tracks,
-            notes,
-            recordings,
-            photos,
+            tracks: tracksRef.current,
+            notes: notesRef.current,
+            recordings: recordingsRef.current,
+            photos: photosRef.current,
             gear,
             generalNote,
             locationName
