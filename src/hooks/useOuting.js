@@ -52,6 +52,38 @@ export function useOuting() {
     }
   };
 
+  // Reusable autosave function to prevent data loss
+  const performAutosave = async () => {
+    if (!startTime) return;
+    try {
+        const currentDuration = Math.floor((Date.now() - startTime) / 1000);
+        const payload = {
+            startTime,
+            endTime: Date.now(),
+            duration: currentDuration,
+            totalDistance,
+            tracks,
+            notes,
+            recordings,
+            photos,
+            gear,
+            generalNote,
+            locationName
+        };
+        
+        if (outingId !== null) {
+            payload.id = outingId;
+        }
+        
+        const newId = await saveOuting(payload);
+        if (outingId === null && newId) {
+            setOutingId(newId); // Save the returned ID so future autosaves overwrite this exact outing
+        }
+    } catch(err) {
+        console.error("Autosave failed:", err);
+    }
+  };
+
   const startOuting = async () => {
     setIsTracking(true);
     setOutingId(null);
@@ -68,10 +100,11 @@ export function useOuting() {
     // Get initial position with high accuracy
     await recordLocation(true);
 
-    // Set interval for every 5 minutes (300,000 ms), with low accuracy to save battery
-    trackingIntervalRef.current = setInterval(() => {
-      recordLocation(false);
-    }, 300000);
+    // Set interval for every 3 minutes (180,000 ms), with low accuracy to save battery
+    trackingIntervalRef.current = setInterval(async () => {
+      await recordLocation(false);
+      await performAutosave();
+    }, 180000);
   };
 
   const stopOuting = async () => {
@@ -80,64 +113,53 @@ export function useOuting() {
       clearInterval(trackingIntervalRef.current);
     }
     
-    // Auto-save to IDB
-    try {
-        const finalDuration = Math.floor((Date.now() - startTime) / 1000);
-        const payload = {
-            startTime,
-            endTime: Date.now(),
-            duration: finalDuration,
-            totalDistance,
-            tracks,
-            notes,
-            recordings,
-            photos,
-            gear,
-            generalNote,
-            locationName
-        };
-        
-        if (outingId !== null) {
-            payload.id = outingId;
-        }
-        
-        await saveOuting(payload);
-        console.log("Outing saved successfully!");
-    } catch(err) {
-        console.error("Failed to save outing data:", err);
-    }
+    // Final save to IDB
+    await performAutosave();
   };
 
   const addNote = async (text) => {
     // Force high accuracy for note pinning
     const pos = await recordLocation(true);
     if (pos) {
-      setNotes(prev => [...prev, {
-        id: Date.now(),
-        text,
-        lat: pos.lat,
-        lng: pos.lng,
-        timestamp: Date.now()
-      }]);
+      setNotes(prev => {
+          const newNotes = [...prev, {
+            id: Date.now(),
+            text,
+            lat: pos.lat,
+            lng: pos.lng,
+            timestamp: Date.now()
+          }];
+          // Use setTimeout to ensure the React state batches before autosaving
+          setTimeout(performAutosave, 0);
+          return newNotes;
+      });
     }
   };
 
   const updateNote = (id, newText) => {
-      setNotes(prev => prev.map(n => n.id === id ? { ...n, text: newText } : n));
+      setNotes(prev => {
+          const updatedNotes = prev.map(n => n.id === id ? { ...n, text: newText } : n);
+          setTimeout(performAutosave, 0);
+          return updatedNotes;
+      });
   };
 
   const addRecording = async (audioBlob, transcription = null) => {
     // Force high accuracy for voice memo pinning
     const pos = await recordLocation(true);
     if (pos) {
-        setRecordings(prev => [...prev, {
-            id: Date.now(),
-            blob: audioBlob,
-            transcription,
-            lat: pos.lat,
-            lng: pos.lng,
-            timestamp: Date.now()
-        }]);
+        setRecordings(prev => {
+            const newRecordings = [...prev, {
+                id: Date.now(),
+                blob: audioBlob,
+                transcription,
+                lat: pos.lat,
+                lng: pos.lng,
+                timestamp: Date.now()
+            }];
+            setTimeout(performAutosave, 0);
+            return newRecordings;
+        });
     }
   };
 
@@ -145,14 +167,18 @@ export function useOuting() {
     // Force high accuracy for photo pinning
     const pos = await recordLocation(true);
     if (pos) {
-        setPhotos(prev => [...prev, {
-            id: Date.now(),
-            data: photoData, // Base64 string
-            text: text,
-            lat: pos.lat,
-            lng: pos.lng,
-            timestamp: Date.now()
-        }]);
+        setPhotos(prev => {
+            const newPhotos = [...prev, {
+                id: Date.now(),
+                dataUrl: photoData, // Base64 string
+                text,
+                lat: pos.lat,
+                lng: pos.lng,
+                timestamp: Date.now()
+            }];
+            setTimeout(performAutosave, 0);
+            return newPhotos;
+        });
     }
   };
 
@@ -179,9 +205,10 @@ export function useOuting() {
       await recordLocation(true);
 
       if (trackingIntervalRef.current) clearInterval(trackingIntervalRef.current);
-      trackingIntervalRef.current = setInterval(() => {
-          recordLocation(false);
-      }, 300000);
+      trackingIntervalRef.current = setInterval(async () => {
+          await recordLocation(false);
+          await performAutosave();
+      }, 180000); // 3 minutes
   };
 
   const updateGear = (newGear) => setGear(prev => ({...prev, ...newGear}));
