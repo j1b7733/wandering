@@ -11,13 +11,18 @@ export function calculateDistance(lat1, lon1, lat2, lon2) {
 }
 
 // Get current GPS position with a Promise
-export function getCurrentPosition() {
+export function getCurrentPosition(highAccuracy = true) {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error("Geolocation is not supported by your browser"));
       return;
     }
     
+    // Looser constraints for background polling saves battery (uses cell towers/wifi limits instead of firing up GPS)
+    const options = highAccuracy 
+        ? { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        : { enableHighAccuracy: false, timeout: 30000, maximumAge: 60000 };
+        
     navigator.geolocation.getCurrentPosition(
       (position) => {
         resolve({
@@ -30,11 +35,7 @@ export function getCurrentPosition() {
       (error) => {
         reject(error);
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0
-      }
+      options
     );
   });
 }

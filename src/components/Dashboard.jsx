@@ -6,23 +6,13 @@ import PhotoTaker from './PhotoTaker';
 import DataExporter from './DataExporter';
 import OutingMap from './OutingMap';
 import GearSelector from './GearSelector';
-
-// Helper to format seconds to HH:MM:SS
-const formatTime = (totalSeconds) => {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  if (h > 0) {
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  }
-  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-};
+import LiveTimer from './LiveTimer';
 
 export default function Dashboard({ outing }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const {
     isTracking,
-    duration,
+    startTime,
     totalDistance,
     startOuting,
     stopOuting,
@@ -91,7 +81,7 @@ export default function Dashboard({ outing }) {
         <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '32px' }}>
           <div className="stat-box">
             <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Duration</div>
-            <div style={{ fontSize: '2.5rem', fontWeight: '700', fontFamily: 'monospace' }}>{formatTime(duration)}</div>
+            <LiveTimer startTime={startTime} isTracking={isTracking} />
           </div>
           <div className="stat-box">
             <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Distance</div>

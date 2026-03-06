@@ -46,6 +46,7 @@ export default function OutingMap({ tracks, notes, recordings, photos = [], isCo
         zoom={currentPosition ? 16 : 2} 
         style={{ height: '100%', width: '100%' }}
         zoomControl={false}
+        scrollWheelZoom={false}
       >
         <LayersControl position="topright">
           <LayersControl.BaseLayer checked name="OpenTopoMap">

@@ -5,7 +5,6 @@ import { saveOuting } from '../utils/storage';
 export function useOuting() {
   const [isTracking, setIsTracking] = useState(false);
   const [startTime, setStartTime] = useState(null);
-  const [duration, setDuration] = useState(0); // in seconds
   const [tracks, setTracks] = useState([]);
   const [totalDistance, setTotalDistance] = useState(0); // in miles
   const [notes, setNotes] = useState([]);
@@ -18,20 +17,6 @@ export function useOuting() {
   const [locationName, setLocationName] = useState(null);
 
   const trackingIntervalRef = useRef(null);
-  const timerIntervalRef = useRef(null);
-
-  // Timer logic
-  useEffect(() => {
-    if (isTracking && startTime) {
-      timerIntervalRef.current = setInterval(() => {
-        setDuration(Math.floor((Date.now() - startTime) / 1000));
-      }, 1000);
-    } else {
-      clearInterval(timerIntervalRef.current);
-    }
-
-    return () => clearInterval(timerIntervalRef.current);
-  }, [isTracking, startTime]);
 
   // Recalculate distance when tracks change
   useEffect(() => {
@@ -44,9 +29,9 @@ export function useOuting() {
     setTotalDistance(distance);
   }, [tracks]);
 
-  const recordLocation = async () => {
+  const recordLocation = async (highAccuracy = false) => {
     try {
-      const position = await getCurrentPosition();
+      const position = await getCurrentPosition(highAccuracy);
       setTracks(prev => {
          // If this is the very first track, run the reverse geocoding asynchronously
          if (prev.length === 0) {
@@ -71,7 +56,6 @@ export function useOuting() {
     setIsTracking(true);
     setOutingId(null);
     setStartTime(Date.now());
-    setDuration(0);
     setTracks([]);
     setTotalDistance(0);
     setNotes([]);
@@ -81,12 +65,12 @@ export function useOuting() {
     setGeneralNote('');
     setLocationName(null);
 
-    // Get initial position
-    await recordLocation();
+    // Get initial position with high accuracy
+    await recordLocation(true);
 
-    // Set interval for every 5 minutes (300,000 ms)
+    // Set interval for every 5 minutes (300,000 ms), with low accuracy to save battery
     trackingIntervalRef.current = setInterval(() => {
-      recordLocation();
+      recordLocation(false);
     }, 300000);
   };
 
@@ -98,10 +82,11 @@ export function useOuting() {
     
     // Auto-save to IDB
     try {
+        const finalDuration = Math.floor((Date.now() - startTime) / 1000);
         const payload = {
             startTime,
             endTime: Date.now(),
-            duration,
+            duration: finalDuration,
             totalDistance,
             tracks,
             notes,
@@ -124,7 +109,8 @@ export function useOuting() {
   };
 
   const addNote = async (text) => {
-    const pos = await recordLocation();
+    // Force high accuracy for note pinning
+    const pos = await recordLocation(true);
     if (pos) {
       setNotes(prev => [...prev, {
         id: Date.now(),
@@ -141,7 +127,8 @@ export function useOuting() {
   };
 
   const addRecording = async (audioBlob, transcription = null) => {
-    const pos = await recordLocation();
+    // Force high accuracy for voice memo pinning
+    const pos = await recordLocation(true);
     if (pos) {
         setRecordings(prev => [...prev, {
             id: Date.now(),
@@ -154,8 +141,9 @@ export function useOuting() {
     }
   };
 
-  const addPhoto = async (photoData, text) => {
-    const pos = await recordLocation();
+  const addPhoto = async (photoData, text = null) => {
+    // Force high accuracy for photo pinning
+    const pos = await recordLocation(true);
     if (pos) {
         setPhotos(prev => [...prev, {
             id: Date.now(),
@@ -175,7 +163,6 @@ export function useOuting() {
       // Set start time conceptually by rewinding from Date.now() by the past duration
       // This makes Date.now() - startTime equate to the existing duration seamlessly
       setStartTime(Date.now() - (pastData.duration * 1000));
-      setDuration(pastData.duration || 0);
       setTotalDistance(pastData.totalDistance || 0);
 
       setTracks(pastData.tracks || []);
@@ -188,11 +175,12 @@ export function useOuting() {
       setLocationName(pastData.locationName || null);
       
       // Grab a fresh location coordinate so the track continues cleanly
-      await recordLocation();
+      // Use high accuracy since the user is actively holding their phone to hit Resume
+      await recordLocation(true);
 
       if (trackingIntervalRef.current) clearInterval(trackingIntervalRef.current);
       trackingIntervalRef.current = setInterval(() => {
-          recordLocation();
+          recordLocation(false);
       }, 300000);
   };
 
@@ -201,7 +189,7 @@ export function useOuting() {
 
   return {
     isTracking,
-    duration,
+    startTime,
     totalDistance,
     tracks,
     notes,
