@@ -38,9 +38,11 @@ export default function OutingMap({ tracks, notes, recordings, photos = [], isCo
   // Local state for editing notes inside map popups
   const [editingNoteId, setEditingNoteId] = React.useState(null);
   const [editNoteText, setEditNoteText] = React.useState('');
+  const [fullScreenPhoto, setFullScreenPhoto] = React.useState(null);
 
   return (
-    <div style={{ height: '300px', width: '100%', borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border-color)', marginBottom: '24px' }}>
+    <>
+      <div style={{ height: '300px', width: '100%', borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border-color)', marginBottom: '24px' }}>
       <MapContainer 
         center={currentPosition || [0, 0]} 
         zoom={currentPosition ? 16 : 2} 
@@ -138,12 +140,44 @@ export default function OutingMap({ tracks, notes, recordings, photos = [], isCo
                <Popup minWidth={220}>
                    <strong style={{ color: 'var(--accent-primary)'}}>Photo</strong>
                    <br/>
-                   <img src={photo.data} alt="Outing point" style={{ width: '100%', height: 'auto', borderRadius: '4px', marginTop: '8px', border: '1px solid #ccc' }} />
+                   <img 
+                      src={photo.dataUrl || photo.data} 
+                      alt="Outing point" 
+                      style={{ width: '100%', height: 'auto', borderRadius: '4px', marginTop: '8px', border: '1px solid #ccc', cursor: 'pointer' }} 
+                      onClick={() => setFullScreenPhoto(photo)}
+                   />
                    {photo.text && <p style={{ margin: '8px 0 0 0', fontStyle: 'italic' }}>{photo.text}</p>}
                </Popup>
            </Marker>
         ))}
       </MapContainer>
     </div>
+
+    {fullScreenPhoto && (
+      <div 
+        style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 9999,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
+        }}
+        onClick={() => setFullScreenPhoto(null)}
+      >
+        <img 
+          src={fullScreenPhoto.dataUrl || fullScreenPhoto.data} 
+          alt="Fullscreen" 
+          style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain' }} 
+        />
+        {fullScreenPhoto.text && (
+           <p style={{ color: 'white', marginTop: '16px', fontSize: '1.2rem', textAlign: 'center', padding: '0 20px' }}>
+             {fullScreenPhoto.text}
+           </p>
+        )}
+        <button 
+          style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', color: 'white', border: 'none', fontSize: '2.5rem', cursor: 'pointer' }}
+          onClick={() => setFullScreenPhoto(null)}
+        >×</button>
+      </div>
+    )}
+  </>
   );
 }
