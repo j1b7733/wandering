@@ -34,6 +34,7 @@ export async function getAllOutingsSummary() {
     startTime: o.startTime,
     duration: o.duration,
     totalDistance: o.totalDistance,
+    locationName: o.locationName,
     trackCount: o.tracks?.length || 0,
     noteCount: o.notes?.length || 0,
     recCount: o.recordings?.length || 0,

@@ -176,6 +176,20 @@ export default function OutingMap({ tracks, notes, recordings, photos = [], isCo
           style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', color: 'white', border: 'none', fontSize: '2.5rem', cursor: 'pointer' }}
           onClick={() => setFullScreenPhoto(null)}
         >×</button>
+        <button
+          style={{ position: 'absolute', bottom: '40px', background: 'var(--accent-primary)', color: 'white', border: 'none', padding: '12px 24px', borderRadius: 'var(--radius-lg)', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', gap: '8px', alignItems: 'center' }}
+          onClick={(e) => {
+              e.stopPropagation();
+              const a = document.createElement('a');
+              a.href = fullScreenPhoto.dataUrl || fullScreenPhoto.data;
+              a.download = `Wandering_Photo_${fullScreenPhoto.timestamp || Date.now()}.jpg`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+          }}
+        >
+          💾 Save to Device
+        </button>
       </div>
     )}
   </>

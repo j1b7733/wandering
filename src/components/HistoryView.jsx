@@ -5,6 +5,7 @@ import { generateKML } from '../utils/geo';
 export default function HistoryView({ onSelectOuting, onBack }) {
   const [outings, setOutings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(new Set());
 
   useEffect(() => {
     loadOutings();
@@ -21,8 +22,23 @@ export default function HistoryView({ onSelectOuting, onBack }) {
     e.stopPropagation();
     if (confirm('Are you sure you want to delete this outing?')) {
       await deleteOuting(id);
+      setSelected(prev => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+      });
       loadOutings();
     }
+  };
+
+  const toggleSelection = (id, e) => {
+    e.stopPropagation();
+    setSelected(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+    });
   };
 
   const handleBatchExport = async () => {
@@ -33,10 +49,20 @@ export default function HistoryView({ onSelectOuting, onBack }) {
             return;
         }
 
+        let dataToExport = fullData;
+        if (selected.size > 0) {
+            dataToExport = fullData.filter(o => selected.has(o.id));
+        }
+
+        if (dataToExport.length === 0) {
+            alert("No selected outings found in the database.");
+            return;
+        }
+
         // Generate a combined KML string with folders for each outing
         let kml = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Document>\n    <name>Wandering Batch Export</name>\n`;
         
-        fullData.forEach((outing, idx) => {
+        dataToExport.forEach((outing, idx) => {
             kml += `    <Folder>\n      <name>Outing ${new Date(outing.startTime).toLocaleDateString()}</name>\n`;
             
             // Track
@@ -95,22 +121,41 @@ export default function HistoryView({ onSelectOuting, onBack }) {
         </div>
       ) : (
         <>
-          <button 
-            className="btn btn-primary" 
-            onClick={handleBatchExport}
-            style={{ width: '100%', marginBottom: '24px', padding: '16px', borderRadius: 'var(--radius-lg)' }}
-          >
-            📦 Batch Export All ({outings.length})
-          </button>
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
+              <button 
+                className="btn btn-primary" 
+                onClick={handleBatchExport}
+                style={{ flex: 1, padding: '16px', borderRadius: 'var(--radius-lg)' }}
+              >
+                {selected.size > 0 ? `📦 Export Selected (${selected.size})` : `📦 Export All (${outings.length})`}
+              </button>
+              {selected.size > 0 && (
+                  <button 
+                      className="btn btn-secondary" 
+                      onClick={() => setSelected(new Set())}
+                      style={{ padding: '16px', borderRadius: 'var(--radius-lg)' }}
+                  >
+                      Clear
+                  </button>
+              )}
+          </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {outings.map(outing => (
               <div 
                 key={outing.id} 
                 className="glass-panel" 
-                style={{ padding: '20px', cursor: 'pointer', transition: 'transform 0.2s', position: 'relative' }}
+                style={{ padding: '20px 20px 20px 48px', cursor: 'pointer', transition: 'transform 0.2s', position: 'relative' }}
                 onClick={() => onSelectOuting(outing.id)}
               >
+                <div style={{ position: 'absolute', top: '24px', left: '16px' }} onClick={e => toggleSelection(outing.id, e)}>
+                    <input 
+                        type="checkbox" 
+                        checked={selected.has(outing.id)} 
+                        readOnly
+                        style={{ transform: 'scale(1.5)', cursor: 'pointer' }} 
+                    />
+                </div>
                 <button 
                     onClick={(e) => handleDelete(outing.id, e)}
                     style={{ position: 'absolute', top: '16px', right: '16px', color: 'var(--danger-color)', fontSize: '1.2rem'}}
