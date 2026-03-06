@@ -18,10 +18,10 @@ async function initDB() {
   });
 }
 
-// Save a new outing
+// Save or update an outing
 export async function saveOuting(outingData) {
   const db = await initDB();
-  return db.add(STORE_NAME, outingData);
+  return db.put(STORE_NAME, outingData);
 }
 
 // Get all outings (without full blobs initially for performance)

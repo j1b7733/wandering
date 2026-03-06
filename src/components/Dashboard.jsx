@@ -5,6 +5,7 @@ import VoiceRecorder from './VoiceRecorder';
 import PhotoTaker from './PhotoTaker';
 import DataExporter from './DataExporter';
 import OutingMap from './OutingMap';
+import GearSelector from './GearSelector';
 
 // Helper to format seconds to HH:MM:SS
 const formatTime = (totalSeconds) => {
@@ -29,9 +30,15 @@ export default function Dashboard({ outing }) {
     notes,
     recordings,
     photos,
+    gear,
+    generalNote,
+    locationName,
     addNote,
     addRecording,
-    addPhoto
+    addPhoto,
+    updateGear,
+    updateGeneralNote,
+    updateNote
   } = outing;
 
   return (
@@ -60,19 +67,25 @@ export default function Dashboard({ outing }) {
           </div>
         )}
 
-        <img src="/logo.png" alt="Wandering Hillbilly Logo" style={{ width: '80px', height: '80px', marginBottom: '16px', filter: 'invert(1) drop-shadow(0 0 10px rgba(43,212,130,0.5))' }} className="animate-fade-in" />
-        <h1 className="animate-fade-in" style={{ color: 'var(--accent-primary)', fontSize: '2.5rem', marginBottom: '8px' }}>
-          Wandering Hillbilly
-        </h1>
-        <p className="animate-fade-in" style={{ animationDelay: '0.1s', opacity: 0, animationFillMode: 'forwards' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', marginBottom: '8px' }}>
+            <img src="/logo.png" alt="Wandering Hillbilly Logo" style={{ width: '60px', height: '60px', filter: 'invert(1) drop-shadow(0 0 10px rgba(43,212,130,0.5))' }} className="animate-fade-in" />
+            <h1 className="animate-fade-in" style={{ color: 'var(--accent-primary)', fontSize: '2.2rem', margin: 0, lineHeight: 1 }}>
+              Wandering Hillbilly
+            </h1>
+        </div>
+        <p className="animate-fade-in" style={{ animationDelay: '0.1s', opacity: 0, animationFillMode: 'forwards', marginTop: '8px' }}>
           Track your nature photography outings
         </p>
       </header>
 
       <div className="glass-panel animate-fade-in" style={{ padding: '32px 24px', animationDelay: '0.2s', opacity: 0, animationFillMode: 'forwards' }}>
         
+        {isTracking && locationName && (
+           <h4 style={{ color: 'var(--accent-primary)', marginBottom: '16px', marginTop: '-16px' }}>📍 {locationName}</h4>
+        )}
+
         {tracks.length > 0 && (
-          <OutingMap tracks={tracks} notes={notes} recordings={recordings} photos={photos} />
+          <OutingMap tracks={tracks} notes={notes} recordings={recordings} photos={photos} updateNote={updateNote} />
         )}
 
         <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '32px' }}>
@@ -88,7 +101,20 @@ export default function Dashboard({ outing }) {
 
         <div style={{ marginBottom: '24px' }}>
           {isTracking ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
+              
+              <GearSelector gear={gear} updateGear={updateGear} />
+              
+              <div className="glass-panel animate-fade-in" style={{ padding: '12px', textAlign: 'left', marginBottom: '16px' }}>
+                 <label style={{ display: 'block', marginBottom: '8px', color: 'var(--accent-primary)', fontSize: '0.9rem', fontWeight: 'bold' }}>General Outing Notes</label>
+                 <textarea 
+                    value={generalNote} 
+                    onChange={(e) => updateGeneralNote(e.target.value)} 
+                    placeholder="Jot down notes about the outing here..."
+                    style={{ width: '100%', minHeight: '60px', padding: '8px', background: 'rgba(0,0,0,0.2)', color: 'white', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', boxSizing: 'border-box', resize: 'vertical' }}
+                 />
+              </div>
+
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                 <NoteTaker onSave={addNote} />
                 <VoiceRecorder onSave={addRecording} onSaveNote={addNote} />

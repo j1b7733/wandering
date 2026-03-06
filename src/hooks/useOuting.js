@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { getCurrentPosition, calculateDistance } from '../utils/geo';
+import { getCurrentPosition, calculateDistance, fetchLocationName } from '../utils/geo';
 import { saveOuting } from '../utils/storage';
 
 export function useOuting() {
@@ -11,6 +11,11 @@ export function useOuting() {
   const [notes, setNotes] = useState([]);
   const [recordings, setRecordings] = useState([]);
   const [photos, setPhotos] = useState([]);
+  
+  const [outingId, setOutingId] = useState(null);
+  const [gear, setGear] = useState({ camera: 'OM-1', lens: '', tc14: false, tc20: false, otherCamera: '' });
+  const [generalNote, setGeneralNote] = useState('');
+  const [locationName, setLocationName] = useState(null);
 
   const trackingIntervalRef = useRef(null);
   const timerIntervalRef = useRef(null);
@@ -42,11 +47,19 @@ export function useOuting() {
   const recordLocation = async () => {
     try {
       const position = await getCurrentPosition();
-      setTracks(prev => [...prev, {
-        lat: position.lat,
-        lng: position.lng,
-        timestamp: position.timestamp
-      }]);
+      setTracks(prev => {
+         // If this is the very first track, run the reverse geocoding asynchronously
+         if (prev.length === 0) {
+            fetchLocationName(position.lat, position.lng).then(name => {
+              if (name) setLocationName(name);
+            });
+         }
+         return [...prev, {
+            lat: position.lat,
+            lng: position.lng,
+            timestamp: position.timestamp
+         }];
+      });
       return position;
     } catch (error) {
       console.error("Failed to get location:", error);
@@ -56,6 +69,7 @@ export function useOuting() {
 
   const startOuting = async () => {
     setIsTracking(true);
+    setOutingId(null);
     setStartTime(Date.now());
     setDuration(0);
     setTracks([]);
@@ -63,6 +77,9 @@ export function useOuting() {
     setNotes([]);
     setRecordings([]);
     setPhotos([]);
+    setGear({ camera: 'OM-1', lens: '', tc14: false, tc20: false, otherCamera: '' });
+    setGeneralNote('');
+    setLocationName(null);
 
     // Get initial position
     await recordLocation();
@@ -81,7 +98,7 @@ export function useOuting() {
     
     // Auto-save to IDB
     try {
-        await saveOuting({
+        const payload = {
             startTime,
             endTime: Date.now(),
             duration,
@@ -89,8 +106,17 @@ export function useOuting() {
             tracks,
             notes,
             recordings,
-            photos
-        });
+            photos,
+            gear,
+            generalNote,
+            locationName
+        };
+        
+        if (outingId !== null) {
+            payload.id = outingId;
+        }
+        
+        await saveOuting(payload);
         console.log("Outing saved successfully!");
     } catch(err) {
         console.error("Failed to save outing data:", err);
@@ -108,6 +134,10 @@ export function useOuting() {
         timestamp: Date.now()
       }]);
     }
+  };
+
+  const updateNote = (id, newText) => {
+      setNotes(prev => prev.map(n => n.id === id ? { ...n, text: newText } : n));
   };
 
   const addRecording = async (audioBlob, transcription = null) => {
@@ -138,6 +168,37 @@ export function useOuting() {
     }
   };
 
+  const resumeOuting = async (pastData) => {
+      setIsTracking(true);
+      setOutingId(pastData.id);
+      
+      // Set start time conceptually by rewinding from Date.now() by the past duration
+      // This makes Date.now() - startTime equate to the existing duration seamlessly
+      setStartTime(Date.now() - (pastData.duration * 1000));
+      setDuration(pastData.duration || 0);
+      setTotalDistance(pastData.totalDistance || 0);
+
+      setTracks(pastData.tracks || []);
+      setNotes(pastData.notes || []);
+      setRecordings(pastData.recordings || []);
+      setPhotos(pastData.photos || []);
+      
+      setGear(pastData.gear || { camera: 'OM-1', lens: '', tc14: false, tc20: false, otherCamera: '' });
+      setGeneralNote(pastData.generalNote || '');
+      setLocationName(pastData.locationName || null);
+      
+      // Grab a fresh location coordinate so the track continues cleanly
+      await recordLocation();
+
+      if (trackingIntervalRef.current) clearInterval(trackingIntervalRef.current);
+      trackingIntervalRef.current = setInterval(() => {
+          recordLocation();
+      }, 300000);
+  };
+
+  const updateGear = (newGear) => setGear(prev => ({...prev, ...newGear}));
+  const updateGeneralNote = (note) => setGeneralNote(note);
+
   return {
     isTracking,
     duration,
@@ -146,10 +207,17 @@ export function useOuting() {
     notes,
     recordings,
     photos,
+    gear,
+    generalNote,
+    locationName,
     startOuting,
+    resumeOuting,
     stopOuting,
     addNote,
+    updateNote,
     addRecording,
-    addPhoto
+    addPhoto,
+    updateGear,
+    updateGeneralNote
   };
 }

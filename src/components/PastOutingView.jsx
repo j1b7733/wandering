@@ -3,7 +3,7 @@ import { getOutingDetails } from '../utils/storage';
 import OutingMap from './OutingMap';
 import DataExporter from './DataExporter';
 
-export default function PastOutingView({ outingId, onBack }) {
+export default function PastOutingView({ outingId, onBack, onResume }) {
   const [outing, setOuting] = useState(null);
   const audioRef = useRef(null);
 
@@ -28,10 +28,21 @@ export default function PastOutingView({ outingId, onBack }) {
     <div className="dashboard-container" style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <button className="btn btn-secondary" onClick={onBack}>⬅ Back</button>
-        <h3 style={{ color: 'var(--accent-primary)' }}>
-            {new Date(outing.startTime).toLocaleDateString()}
-        </h3>
+        <div style={{ textAlign: 'right' }}>
+            <h3 style={{ color: 'var(--accent-primary)', margin: 0 }}>
+                {new Date(outing.startTime).toLocaleDateString()}
+            </h3>
+            {outing.locationName && (
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>
+                    📍 {outing.locationName}
+                </div>
+            )}
+        </div>
       </header>
+
+      <button className="btn btn-primary" onClick={() => onResume(outing)} style={{ width: '100%', marginBottom: '24px', padding: '16px', borderRadius: 'var(--radius-md)' }}>
+         ▶️ Resume Outing
+      </button>
 
       <div className="glass-panel animate-fade-in" style={{ padding: '24px', marginBottom: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '24px' }}>
@@ -47,6 +58,26 @@ export default function PastOutingView({ outingId, onBack }) {
 
           <OutingMap tracks={outing.tracks || []} notes={outing.notes || []} recordings={outing.recordings || []} photos={outing.photos || []} isComplete={true} />
           
+          {outing.gear && (
+              <div style={{ marginTop: '16px', background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: 'var(--radius-sm)', textAlign: 'left', fontSize: '0.9rem' }}>
+                  <h4 style={{ marginBottom: '8px', color: 'var(--accent-primary)' }}>Gear Used</h4>
+                  <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+                      <strong>Camera:</strong> {outing.gear.camera === 'Other' ? outing.gear.otherCamera : outing.gear.camera} <br/>
+                      <strong>Lens:</strong> {outing.gear.lens || 'None Selected'} <br/>
+                      <strong>Filters/TC:</strong> {[outing.gear.tc14 && '1.4x TC', outing.gear.tc20 && '2x TC'].filter(Boolean).join(', ') || 'None'}
+                  </p>
+              </div>
+          )}
+
+          {outing.generalNote && (
+              <div style={{ marginTop: '16px', background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: 'var(--radius-sm)', textAlign: 'left', fontSize: '0.9rem' }}>
+                  <h4 style={{ marginBottom: '8px', color: 'var(--accent-primary)' }}>General Notes</h4>
+                  <p style={{ margin: 0, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
+                      {outing.generalNote}
+                  </p>
+              </div>
+          )}
+
           <div style={{ marginTop: '16px' }}>
              <DataExporter tracks={outing.tracks || []} notes={outing.notes || []} recordings={outing.recordings || []} photos={outing.photos || []} />
           </div>

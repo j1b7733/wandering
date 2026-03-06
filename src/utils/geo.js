@@ -105,3 +105,17 @@ export function generateKML(tracks, notes, photos = []) {
 
   return kml;
 }
+
+// Fetch a human readable location name from latitude and longitude using Nominatim OpenStreetMap API
+export async function fetchLocationName(lat, lng) {
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14`;
+    const response = await fetch(url, { headers: { 'Accept-Language': 'en-US,en' } });
+    if (!response.ok) throw new Error('Network response was not ok');
+    const data = await response.json();
+    return data.name || data.display_name.split(',')[0].trim() || 'Unknown Location';
+  } catch (error) {
+    console.warn("Failed to reverse geocode:", error);
+    return null;
+  }
+}

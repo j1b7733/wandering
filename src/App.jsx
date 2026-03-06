@@ -28,7 +28,7 @@ function App() {
 
       {view === 'dashboard' && <Dashboard outing={outing} />}
       {view === 'history' && <HistoryView onBack={goToDashboard} onSelectOuting={viewOuting} />}
-      {view === 'past-outing' && <PastOutingView outingId={selectedOutingId} onBack={goToHistory} />}
+      {view === 'past-outing' && <PastOutingView outingId={selectedOutingId} onBack={goToHistory} onResume={(pastData) => { outing.resumeOuting(pastData); goToDashboard(); }} />}
     </>
   )
 }

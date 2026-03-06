@@ -118,6 +118,11 @@ export default function HistoryView({ onSelectOuting, onBack }) {
                     🗑️
                 </button>
                 <h3 style={{ marginBottom: '8px' }}>{new Date(outing.startTime).toLocaleDateString()} at {new Date(outing.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</h3>
+                {outing.locationName && (
+                   <div style={{ color: 'var(--accent-primary)', fontSize: '0.95rem', marginBottom: '12px', fontWeight: 'bold' }}>
+                       📍 {outing.locationName}
+                   </div>
+                )}
                 <div style={{ display: 'flex', gap: '16px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                     <span>⏱️ {Math.floor(outing.duration / 60)} min</span>
                     <span>📍 {outing.totalDistance.toFixed(2)} mi</span>
