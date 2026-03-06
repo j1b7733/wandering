@@ -1,31 +1,38 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 export default function VoiceRecorder({ onSave, onSaveNote }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [hasRecorded, setHasRecorded] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [transcribedText, setTranscribedText] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
   
   const mediaRecorderRef = useRef(null);
   const recognitionRef = useRef(null);
   const chunksRef = useRef([]);
-  const pendingBlobRef = useRef(null);
+
+  // Automatically start recording when the modal opens
+  useEffect(() => {
+    if (isOpen && !isRecording) {
+      startRecordingProcess();
+    }
+    // Cleanup if unmounted
+    return () => {
+      if (mediaRecorderRef.current && isRecording && !isProcessing) {
+        stopRecordingProcess(false);
+      }
+    };
+  }, [isOpen]);
 
   const openRecorder = () => {
       setIsOpen(true);
-      setHasRecorded(false);
-      setIsRecording(false);
       setTranscribedText('');
-      pendingBlobRef.current = null;
+      setErrorMsg('');
+      chunksRef.current = [];
   };
 
   const closeRecorder = () => {
-      stopRecordingProcess();
-      setIsOpen(false);
-      setHasRecorded(false);
-      setIsRecording(false);
-      setTranscribedText('');
-      pendingBlobRef.current = null;
+      stopRecordingProcess(false); // Cancel/Discard
   };
 
   const startRecordingProcess = async () => {
@@ -35,12 +42,6 @@ export default function VoiceRecorder({ onSave, onSaveNote }) {
       mediaRecorderRef.current = new MediaRecorder(stream);
       mediaRecorderRef.current.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
-      mediaRecorderRef.current.onstop = () => {
-        pendingBlobRef.current = new Blob(chunksRef.current, { type: 'audio/webm' });
-        chunksRef.current = [];
-        setHasRecorded(true);
       };
 
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -61,45 +62,104 @@ export default function VoiceRecorder({ onSave, onSaveNote }) {
                   setTranscribedText(prev => (prev + ' ' + finalTranscript).trim());
               }
           };
-          recognitionRef.current.start();
+          
+          recognitionRef.current.onerror = (e) => {
+              console.warn("Speech Recognition Error:", e.error);
+              if (e.error === 'not-allowed') {
+                  setErrorMsg("Microphone permission denied for voice notes.");
+              }
+          };
+
+          try {
+              recognitionRef.current.start();
+          } catch(err) {
+              console.warn("Failed to start speech recognition:", err);
+          }
       } else {
           setTranscribedText("[Speech Recognition not supported in this browser]");
       }
 
-      mediaRecorderRef.current.start();
+      mediaRecorderRef.current.start(250); // Provide timeslice to ensure data chunks
       setIsRecording(true);
-      setHasRecorded(false);
     } catch (err) {
       console.error("Microphone access denied or error:", err);
-      alert("Microphone access is needed to record audio.");
+      setErrorMsg("Microphone access is needed to record audio.");
+      // Do not auto close so the user can read the error
     }
   };
 
-  const stopRecordingProcess = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+  const stopRecordingProcess = async (save = true) => {
+    // Force close helper
+    const finalizeClose = () => {
+        setIsProcessing(false);
+        setIsRecording(false);
+        setIsOpen(false);
+        setTranscribedText('');
+    };
+
+    // If not recording, just close the modal
+    if (!mediaRecorderRef.current || !isRecording) {
+        finalizeClose();
+        return;
     }
+
+    setIsProcessing(true);
+
+    const finalTrimmedText = transcribedText.trim();
+    const hasText = finalTrimmedText.length > 0 && !finalTrimmedText.startsWith("[Speech");
+
+    // Promise wrapper with a timeout fallback just in case onstop never fires
+    const getFinalBlob = new Promise((resolve) => {
+        const fallbackId = setTimeout(() => {
+            console.warn("MediaRecorder onstop timeout");
+            resolve(new Blob(chunksRef.current, { type: 'audio/webm' }));
+        }, 1500);
+
+        if (mediaRecorderRef.current.state === 'inactive') {
+            clearTimeout(fallbackId);
+            resolve(new Blob(chunksRef.current, { type: 'audio/webm' }));
+            return;
+        }
+
+        mediaRecorderRef.current.onstop = () => {
+            clearTimeout(fallbackId);
+            const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+            resolve(blob);
+        };
+    });
+
+    try {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    } catch (err) {
+        console.warn("Error stopping media recorder:", err);
+    }
+    
     if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try { recognitionRef.current.stop(); } catch(e) {}
     }
+    
     setIsRecording(false);
+
+    if (save) {
+        try {
+            const finalBlob = await getFinalBlob;
+            if (finalBlob && finalBlob.size > 0) {
+                await onSave(finalBlob, hasText ? finalTrimmedText : null);
+            } else if (hasText) {
+                // If audio failed but we have text, save text at least
+                await onSaveNote(finalTrimmedText);
+            }
+        } catch(err) {
+            console.error("Error saving voice recording:", err);
+        }
+    }
+    
+    finalizeClose();
   };
 
-  const handleSaveOption = async (option) => {
-      const trimmedText = transcribedText.trim();
-      const hasText = trimmedText.length > 0 && !trimmedText.startsWith("[Speech");
-
-      if (option === 'audio' || option === 'both') {
-          const extraInfo = (option === 'both' && hasText) ? trimmedText : null;
-          await onSave(pendingBlobRef.current, extraInfo);
-      }
-      
-      if (option === 'text' && hasText) {
-          await onSaveNote(trimmedText);
-      }
-
-      closeRecorder();
+  const handleFinish = () => {
+      stopRecordingProcess(true);
   };
 
   if (isOpen) {
@@ -108,45 +168,48 @@ export default function VoiceRecorder({ onSave, onSaveNote }) {
               <h2 style={{ textAlign: 'center', marginBottom: '24px', color: 'var(--accent-primary)' }}>Voice Memo</h2>
               
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                 {!isRecording && !hasRecorded && (
-                     <div style={{ textAlign: 'center' }}>
-                         <p style={{ color: 'var(--text-secondary)', marginBottom: '32px' }}>Press start to record and transcribe audio.</p>
-                         <button className="btn btn-primary" onClick={startRecordingProcess} style={{ padding: '24px', fontSize: '1.2rem', borderRadius: '50%', width: '120px', height: '120px' }}>
-                             🎤 Start
-                         </button>
+                 {!isRecording && errorMsg ? (
+                     <div style={{ textAlign: 'center', color: 'var(--danger)', background: 'rgba(244, 63, 94, 0.1)', padding: '16px', borderRadius: 'var(--radius-md)' }}>
+                         <h3>Error</h3>
+                         <p>{errorMsg}</p>
                      </div>
-                 )}
-
-                 {isRecording && (
+                 ) : isRecording ? (
                      <div style={{ textAlign: 'center' }}>
                          <div style={{ animation: 'pulse 1.5s infinite', background: 'rgba(244, 63, 94, 0.2)', width: '140px', height: '140px', borderRadius: '50%', margin: '0 auto 32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <button className="btn btn-danger" onClick={stopRecordingProcess} style={{ padding: '24px', fontSize: '1.2rem', borderRadius: '50%', width: '100px', height: '100px' }}>
-                                ⏹️ Stop
-                            </button>
+                            <div style={{ background: 'var(--danger)', width: '60px', height: '60px', borderRadius: '50%' }}></div>
                          </div>
                          <div style={{ background: 'rgba(0,0,0,0.3)', padding: '16px', borderRadius: 'var(--radius-md)', minHeight: '100px', textAlign: 'left' }}>
-                             <span style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>Recording...</span><br/>
+                             <span style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>Recording & Transcribing...</span><br/>
                              {transcribedText}
                          </div>
                      </div>
-                 )}
-
-                 {hasRecorded && !isRecording && (
-                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                         <div style={{ background: 'rgba(0,0,0,0.3)', padding: '16px', borderRadius: 'var(--radius-md)', minHeight: '100px', textAlign: 'left', marginBottom: '16px' }}>
-                             <strong>Transcription:</strong><br/>
-                             {transcribedText || 'No text detected.'}
-                         </div>
-                         <button className="btn btn-primary" onClick={() => handleSaveOption('both')} style={{ padding: '16px', fontSize: '1.1rem' }}>Save Audio + Text</button>
-                         <button className="btn btn-secondary" onClick={() => handleSaveOption('audio')} style={{ padding: '16px', fontSize: '1.1rem' }}>Save Audio Only</button>
-                         <button className="btn btn-secondary" onClick={() => handleSaveOption('text')} disabled={!transcribedText.trim()} style={{ padding: '16px', fontSize: '1.1rem' }}>Save Text Only</button>
+                 ) : isProcessing ? (
+                     <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+                        Saving File...
                      </div>
+                 ) : (
+                    <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+                        Getting microphone access...
+                    </div>
                  )}
               </div>
 
-              <div style={{ marginTop: 'auto', paddingTop: '24px' }}>
-                  <button className="btn btn-danger" onClick={closeRecorder} style={{ width: '100%', padding: '16px', fontSize: '1.1rem' }}>
-                      Cancel / Close
+              <div style={{ marginTop: 'auto', paddingTop: '24px', display: 'flex', gap: '16px', flexDirection: 'column' }}>
+                  <button 
+                      className="btn btn-primary" 
+                      onClick={handleFinish} 
+                      disabled={isProcessing || (!isRecording && !errorMsg)}
+                      style={{ width: '100%', padding: '20px', fontSize: '1.2rem', opacity: isProcessing ? 0.5 : 1 }}
+                  >
+                      {isProcessing ? "Wait..." : "Finish & Save"}
+                  </button>
+                  <button 
+                      className="btn btn-danger" 
+                      onClick={closeRecorder} 
+                      disabled={isProcessing}
+                      style={{ width: '100%', padding: '16px', fontSize: '1.1rem', opacity: isProcessing ? 0.5 : 1 }}
+                  >
+                      Cancel
                   </button>
               </div>
 
