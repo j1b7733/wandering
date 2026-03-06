@@ -26,7 +26,8 @@ export default function VoiceRecorder({ onSave }) {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
 
-      mediaRecorderRef.current.start(250); 
+      // Start without timeslicing to collect the whole file in one chunk reliably
+      mediaRecorderRef.current.start(); 
       setIsRecording(true);
     } catch (err) {
       console.error("Microphone access denied or error:", err);
@@ -35,58 +36,51 @@ export default function VoiceRecorder({ onSave }) {
   };
 
   const stopRecordingProcess = async (save = true) => {
-    const finalizeClose = () => {
+    if (!mediaRecorderRef.current || !isRecording) {
         setIsProcessing(false);
         setIsRecording(false);
-    };
-
-    if (!mediaRecorderRef.current || !isRecording) {
-        finalizeClose();
         return;
     }
 
     setIsProcessing(true);
 
+    // Create a strict Promise that only resolves once the recorder has truly stopped 
+    // and fired its final ondataavailable event.
     const getFinalBlob = new Promise((resolve) => {
-        const fallbackId = setTimeout(() => {
-            resolve(new Blob(chunksRef.current, { type: 'audio/webm' }));
-        }, 1500);
-
-        if (mediaRecorderRef.current.state === 'inactive') {
-            clearTimeout(fallbackId);
-            resolve(new Blob(chunksRef.current, { type: 'audio/webm' }));
-            return;
-        }
-
         mediaRecorderRef.current.onstop = () => {
-            clearTimeout(fallbackId);
-            const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+            // Use the native mimeType from the device (e.g., audio/mp4 on iOS, audio/webm on Android)
+            const blob = new Blob(chunksRef.current, { type: mediaRecorderRef.current.mimeType });
             resolve(blob);
         };
     });
 
     try {
-        mediaRecorderRef.current.stop();
-        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+        if (mediaRecorderRef.current.state !== 'inactive') {
+             mediaRecorderRef.current.stop();
+        }
     } catch (err) {
         console.warn("Error stopping media recorder:", err);
     }
-    
-    setIsRecording(false);
 
     if (save) {
         try {
             const finalBlob = await getFinalBlob;
             if (finalBlob && finalBlob.size > 0) {
-                await onSave(finalBlob, null); // No transcription
+                await onSave(finalBlob, null);
             }
         } catch(err) {
             console.error("Error saving voice recording:", err);
         }
     }
     
+    // Cleanup chunks and hardware tracks safely after the blob is extracted
     chunksRef.current = [];
-    finalizeClose();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.stream) {
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+    
+    setIsProcessing(false);
+    setIsRecording(false);
   };
 
   const toggleRecording = () => {
