@@ -70,13 +70,20 @@ export function stopWatchingPosition(watchId) {
 }
 
 // Generate KML string from tracks and notes
-export function generateKML(tracks, notes, photos = []) {
+export function generateKML(tracks, notes, photos = [], startTime = null) {
   let kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
     <name>Wandering Hillbilly Outing - ${new Date().toLocaleDateString()}</name>
     <description>Exported from Wandering Hillbilly Tracker</description>
 `;
+
+  if (startTime) {
+    kml += `    <TimeStamp>
+      <when>${startTime}</when>
+    </TimeStamp>
+`;
+  }
 
   // Add line path for tracks
   if (tracks.length > 0) {

@@ -72,7 +72,8 @@ export default function HistoryView({ onSelectOuting, onBack }) {
             const kmlContent = generateKML(
               outing.tracks || [],
               outing.notes || [],
-              outing.photos || []
+              outing.photos || [],
+              outing.startTime
             );
             
             zip.file(fileName, kmlContent);
