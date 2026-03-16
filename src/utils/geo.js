@@ -40,6 +40,35 @@ export function getCurrentPosition(highAccuracy = true) {
   });
 }
 
+// Watch continuously with high accuracy (better for OS background management)
+export function startWatchingPosition(onSuccess, onError) {
+  if (!navigator.geolocation) {
+    if (onError) onError(new Error("Geolocation is not supported."));
+    return null;
+  }
+  
+  return navigator.geolocation.watchPosition(
+    (position) => {
+      onSuccess({
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        timestamp: position.timestamp,
+        accuracy: position.coords.accuracy
+      });
+    },
+    (error) => {
+      if (onError) onError(error);
+    },
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
+  );
+}
+
+export function stopWatchingPosition(watchId) {
+  if (watchId !== null && navigator.geolocation) {
+    navigator.geolocation.clearWatch(watchId);
+  }
+}
+
 // Generate KML string from tracks and notes
 export function generateKML(tracks, notes, photos = []) {
   let kml = `<?xml version="1.0" encoding="UTF-8"?>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { getCurrentPosition, calculateDistance, fetchLocationName } from '../utils/geo';
+import { getCurrentPosition, calculateDistance, fetchLocationName, startWatchingPosition, stopWatchingPosition } from '../utils/geo';
 import { saveOuting } from '../utils/storage';
 
 export function useOuting() {
@@ -44,22 +44,51 @@ export function useOuting() {
     }, 0);
   }, [tracks]);
 
+  const handleNewPosition = async (pos) => {
+    // 1. Accuracy Filter: Ignore positions with poor accuracy (> 50 meters radius)
+    // This prevents wild "spiderweb" drifting when the phone is struggling for signal in a pocket
+    if (pos.accuracy && pos.accuracy > 50) {
+       return;
+    }
+
+    setTracks(prev => {
+       // 2. Distance Filter: Only save point if it's actually moved a meaningful distance
+       // Set at ~25 feet (0.005 miles) to avoid database bloat and track scribbling
+       if (prev.length > 0) {
+          const lastPoint = prev[prev.length - 1];
+          const dist = calculateDistance(lastPoint.lat, lastPoint.lng, pos.lat, pos.lng);
+          if (dist < 0.005) {
+            return prev; // Hasn't moved far enough, ignore
+          }
+       } else {
+          // If this is the very first track, run the reverse geocoding asynchronously
+          fetchLocationName(pos.lat, pos.lng).then(name => {
+             if (name) setLocationName(name);
+          });
+       }
+
+       const newTracks = [...prev, {
+          lat: pos.lat,
+          lng: pos.lng,
+          timestamp: pos.timestamp
+       }];
+
+       // Use timeout to ensure state batches before autosaving
+       setTimeout(performAutosave, 0);
+       return newTracks;
+    });
+  };
+
   const recordLocation = async (highAccuracy = false) => {
     try {
       const position = await getCurrentPosition(highAccuracy);
-      setTracks(prev => {
-         // If this is the very first track, run the reverse geocoding asynchronously
-         if (prev.length === 0) {
-            fetchLocationName(position.lat, position.lng).then(name => {
-              if (name) setLocationName(name);
-            });
-         }
-         return [...prev, {
-            lat: position.lat,
-            lng: position.lng,
-            timestamp: position.timestamp
-         }];
-      });
+      // For on-demand spot checks (photos/notes), we optionally skip the distance filter,
+      // but we still want the geocoding if it's the first point. 
+      // We pass it to handleNewPosition to keep distance tracking clean if we want, 
+      // or we can allow it to force-drop exactly. Let's use handleNewPosition but without distance enforcement for notes.
+      // Easiest way is to just let the standard handleNewPosition rule it unless it's a direct manual fetch.
+      // Since recordLocation is used for photos/notes, we just return the raw position for the modal to use
+      // and we let the background watchPosition handle the path drawing.
       return position;
     } catch (error) {
       console.error("Failed to get location:", error);
@@ -112,20 +141,23 @@ export function useOuting() {
     setGeneralNote('');
     setLocationName(null);
 
-    // Get initial position with high accuracy
-    await recordLocation(true);
+    // Get initial position manually to ensure immediate start
+    const initialPos = await recordLocation(true);
+    if (initialPos) handleNewPosition(initialPos);
 
-    // Set interval for every 3 minutes (180,000 ms), with low accuracy to save battery
-    trackingIntervalRef.current = setInterval(async () => {
-      await recordLocation(false);
-      await performAutosave();
-    }, 180000);
+    // Set up continuous native background watching instead of a manual interval
+    if (trackingIntervalRef.current) stopWatchingPosition(trackingIntervalRef.current);
+    trackingIntervalRef.current = startWatchingPosition(
+      (pos) => handleNewPosition(pos),
+      (err) => console.warn("Background tracking error:", err)
+    );
   };
 
   const stopOuting = async () => {
     setIsTracking(false);
     if (trackingIntervalRef.current) {
-      clearInterval(trackingIntervalRef.current);
+      stopWatchingPosition(trackingIntervalRef.current);
+      trackingIntervalRef.current = null;
     }
     
     // Final save to IDB
@@ -219,11 +251,11 @@ export function useOuting() {
       // Use high accuracy since the user is actively holding their phone to hit Resume
       await recordLocation(true);
 
-      if (trackingIntervalRef.current) clearInterval(trackingIntervalRef.current);
-      trackingIntervalRef.current = setInterval(async () => {
-          await recordLocation(false);
-          await performAutosave();
-      }, 180000); // 3 minutes
+      if (trackingIntervalRef.current) stopWatchingPosition(trackingIntervalRef.current);
+      trackingIntervalRef.current = startWatchingPosition(
+        (pos) => handleNewPosition(pos),
+        (err) => console.warn("Background tracking error:", err)
+      );
   };
 
   const updateGear = (newGear) => setGear(prev => ({...prev, ...newGear}));
