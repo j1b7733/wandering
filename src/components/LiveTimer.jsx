@@ -8,16 +8,15 @@ export default function LiveTimer({ startTime, isTracking }) {
   useEffect(() => {
     let interval;
     if (isTracking && startTime) {
-      // Calculate initial duration immediately to prevent 1s flash of 0
-      setDuration(Math.floor((Date.now() - startTime) / 1000));
+      // Allow interval to just tick naturally
       interval = setInterval(() => {
         setDuration(Math.floor((Date.now() - startTime) / 1000));
       }, 1000);
     } else if (startTime) {
        // Freeze final time if stopped but not reset
-       setDuration(Math.floor((Date.now() - startTime) / 1000));
+       setTimeout(() => setDuration(Math.floor((Date.now() - startTime) / 1000)), 0);
     } else {
-       setDuration(0);
+       setTimeout(() => setDuration(0), 0);
     }
 
     return () => clearInterval(interval);

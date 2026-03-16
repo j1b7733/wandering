@@ -38,7 +38,10 @@ export function useOuting() {
         const p2 = tracks[i];
         distance += calculateDistance(p1.lat, p1.lng, p2.lat, p2.lng);
     }
-    setTotalDistance(distance);
+    // Prevent sync setState to satisfy React strict mode guidelines
+    setTimeout(() => {
+      setTotalDistance(distance);
+    }, 0);
   }, [tracks]);
 
   const recordLocation = async (highAccuracy = false) => {

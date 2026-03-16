@@ -92,7 +92,7 @@ export default function VoiceRecorder({ onSave }) {
     // Forcefully request any final trailing data before stopping
     try {
       recorder.requestData();
-    } catch(e) { /* Ignore if unsupported */ }
+    } catch { /* Ignore if unsupported */ }
     
     recorder.stop();
   };

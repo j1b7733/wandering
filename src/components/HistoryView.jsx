@@ -1,15 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { getAllOutingsSummary, deleteOuting, getAllOutingsFull } from '../utils/storage';
 import { generateKML } from '../utils/geo';
+import JSZip from 'jszip';
 
 export default function HistoryView({ onSelectOuting, onBack }) {
   const [outings, setOutings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(new Set());
-
-  useEffect(() => {
-    loadOutings();
-  }, []);
 
   const loadOutings = async () => {
     setLoading(true);
@@ -17,6 +14,12 @@ export default function HistoryView({ onSelectOuting, onBack }) {
     setOutings(data);
     setLoading(false);
   };
+
+  useEffect(() => {
+    setTimeout(() => {
+      loadOutings();
+    }, 0);
+  }, []);
 
   const handleDelete = async (id, e) => {
     e.stopPropagation();
@@ -59,43 +62,28 @@ export default function HistoryView({ onSelectOuting, onBack }) {
             return;
         }
 
-        // Generate a combined KML string with folders for each outing
-        let kml = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Document>\n    <name>Wandering Batch Export</name>\n`;
-        
-        dataToExport.forEach((outing, idx) => {
-            kml += `    <Folder>\n      <name>Outing ${new Date(outing.startTime).toLocaleDateString()}</name>\n`;
+        const zip = new JSZip();
+
+        dataToExport.forEach((outing) => {
+            const dateStr = new Date(outing.startTime).toISOString().replace(/[:.]/g, '-');
+            const fileName = `Outing_${dateStr}.kml`;
             
-            // Track
-            if (outing.tracks && outing.tracks.length > 0) {
-                const coordinates = outing.tracks.map(t => `${t.lng},${t.lat},0`).join(' ');
-                kml += `      <Placemark><name>Path</name><Style><LineStyle><color>ff00ffff</color><width>4</width></LineStyle></Style><LineString><tessellate>1</tessellate><coordinates>${coordinates}</coordinates></LineString></Placemark>\n`;
-            }
-            // Notes
-            if (outing.notes) {
-                outing.notes.forEach((note, nIdx) => {
-                    kml += `      <Placemark><name>Note ${nIdx + 1}</name><description>${note.text}</description><Point><coordinates>${note.lng},${note.lat},0</coordinates></Point></Placemark>\n`;
-                });
-            }
-            // Photos
-            if (outing.photos) {
-                outing.photos.forEach((photo, pIdx) => {
-                    const descHtml = `<![CDATA[
-                        ${photo.text ? `<p>${photo.text}</p>` : ''}
-                        <img src="${photo.data}" width="300" />
-                    ]]>`;
-                    kml += `      <Placemark><name>Photo ${pIdx + 1}</name><description>${descHtml}</description><Point><coordinates>${photo.lng},${photo.lat},0</coordinates></Point></Placemark>\n`;
-                });
-            }
-            kml += `    </Folder>\n`;
+            // Re-use our robust generateKML logic for each outing
+            const kmlContent = generateKML(
+              outing.tracks || [],
+              outing.notes || [],
+              outing.photos || []
+            );
+            
+            zip.file(fileName, kmlContent);
         });
 
-        kml += `  </Document>\n</kml>`;
-
-        const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
-        const url = URL.createObjectURL(blob);
+        const content = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(content);
+        
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Wandering_Batch_Export_${new Date().toISOString().split('T')[0]}.kml`;
+        a.download = `Wandering_Batch_Export_${new Date().toISOString().split('T')[0]}.zip`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

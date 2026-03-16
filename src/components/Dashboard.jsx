@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useOuting } from '../hooks/useOuting';
 import NoteTaker from './NoteTaker';
 import VoiceRecorder from './VoiceRecorder';
 import PhotoTaker from './PhotoTaker';
