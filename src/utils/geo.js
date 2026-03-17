@@ -109,10 +109,12 @@ export function generateKML(tracks, notes, photos = [], startTime = null) {
 
   // Add placemarks for notes
   notes.forEach((note, index) => {
+    const noteTime = note.timestamp || note.createdAt || startTime || null;
     kml += `
     <Placemark>
       <name>Note ${index + 1}</name>
       <description>${note.text}</description>
+      ${noteTime ? `<TimeStamp><when>${noteTime}</when></TimeStamp>` : ''}
       <Point>
         <coordinates>${note.lng},${note.lat},0</coordinates>
       </Point>
@@ -122,6 +124,7 @@ export function generateKML(tracks, notes, photos = [], startTime = null) {
 
   // Add photos
   photos.forEach((photo, index) => {
+    const photoTime = photo.timestamp || photo.createdAt || (photo.exif?.dateTaken ? new Date(photo.exif.dateTaken).toISOString() : null) || startTime || null;
     const descHtml = `<![CDATA[
         ${photo.text ? `<p>${photo.text}</p>` : ''}
         <img src="${photo.data}" width="300" />
@@ -130,6 +133,7 @@ export function generateKML(tracks, notes, photos = [], startTime = null) {
     <Placemark>
       <name>Photo ${index + 1}</name>
       <description>${descHtml}</description>
+      ${photoTime ? `<TimeStamp><when>${photoTime}</when></TimeStamp>` : ''}
       <Point>
         <coordinates>${photo.lng},${photo.lat},0</coordinates>
       </Point>
