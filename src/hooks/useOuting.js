@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getCurrentPosition, calculateDistance, fetchLocationName, startWatchingPosition, stopWatchingPosition } from '../utils/geo';
 import { saveOuting } from '../utils/storage';
+import { startNoSleep, stopNoSleep } from '../utils/nosleep';
 
 export function useOuting() {
   const [isTracking, setIsTracking] = useState(false);
@@ -144,6 +145,9 @@ export function useOuting() {
     // Get initial position manually to ensure immediate start
     const initialPos = await recordLocation(true);
     if (initialPos) handleNewPosition(initialPos);
+    
+    // Initiate background Media lock to secure screen-off WebKit threads
+    startNoSleep();
 
     // Set up continuous native background watching instead of a manual interval
     if (trackingIntervalRef.current) stopWatchingPosition(trackingIntervalRef.current);
@@ -159,6 +163,8 @@ export function useOuting() {
       stopWatchingPosition(trackingIntervalRef.current);
       trackingIntervalRef.current = null;
     }
+    
+    stopNoSleep();
     
     // Final save to IDB
     await performAutosave();
@@ -250,6 +256,8 @@ export function useOuting() {
       // Grab a fresh location coordinate so the track continues cleanly
       // Use high accuracy since the user is actively holding their phone to hit Resume
       await recordLocation(true);
+
+      startNoSleep();
 
       if (trackingIntervalRef.current) stopWatchingPosition(trackingIntervalRef.current);
       trackingIntervalRef.current = startWatchingPosition(
