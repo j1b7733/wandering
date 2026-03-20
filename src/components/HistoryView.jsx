@@ -73,7 +73,8 @@ export default function HistoryView({ onSelectOuting, onBack }) {
               outing.tracks || [],
               outing.notes || [],
               outing.photos || [],
-              outing.startTime
+              outing.startTime,
+              outing.generalNote
             );
             
             zip.file(fileName, kmlContent);

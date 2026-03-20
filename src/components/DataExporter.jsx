@@ -1,11 +1,11 @@
 import React from 'react';
 import { generateKML } from '../utils/geo';
 
-export default function DataExporter({ tracks, notes, recordings, photos = [] }) {
+export default function DataExporter({ tracks, notes, recordings, photos = [], generalNote = '' }) {
   const handleExport = () => {
     // Generate KML XML string with explicit TimeStamp
     const startTime = tracks.length > 0 ? tracks[0].timestamp : new Date().toISOString();
-    const kmlContent = generateKML(tracks, notes, photos, startTime);
+    const kmlContent = generateKML(tracks, notes, photos, startTime, generalNote);
     
     // Create Blob and Download
     const blob = new Blob([kmlContent], { type: 'application/vnd.google-earth.kml+xml' });
