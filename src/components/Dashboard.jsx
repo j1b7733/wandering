@@ -6,9 +6,11 @@ import DataExporter from './DataExporter';
 import OutingMap from './OutingMap';
 import GearSelector from './GearSelector';
 import LiveTimer from './LiveTimer';
+import BatterySaver from './BatterySaver';
 
 export default function Dashboard({ outing }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isBatterySaverActive, setIsBatterySaverActive] = useState(false);
   const {
     isTracking,
     startTime,
@@ -32,6 +34,9 @@ export default function Dashboard({ outing }) {
 
   return (
     <div className="dashboard-container" style={{ padding: '24px', maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
+      {isBatterySaverActive && (
+        <BatterySaver onExit={() => setIsBatterySaverActive(false)} />
+      )}
       <header style={{ position: 'relative', marginBottom: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         
         {isTracking && (
@@ -45,7 +50,14 @@ export default function Dashboard({ outing }) {
         )}
 
         {menuOpen && isTracking && (
-          <div className="glass-panel animate-fade-in" style={{ position: 'absolute', top: '50px', right: '0', padding: '16px', zIndex: 11, display: 'flex', flexDirection: 'column', minWidth: '150px' }}>
+          <div className="glass-panel animate-fade-in" style={{ position: 'absolute', top: '50px', right: '0', padding: '16px', zIndex: 11, display: 'flex', flexDirection: 'column', minWidth: '150px', gap: '8px' }}>
+            <button 
+                className="btn btn-secondary" 
+                onClick={() => { setMenuOpen(false); setIsBatterySaverActive(true); }}
+                style={{ padding: '12px', fontSize: '1rem', width: '100%', borderRadius: 'var(--radius-md)' }}
+            >
+                🔋 Battery Saver
+            </button>
             <button 
                 className="btn btn-danger" 
                 onClick={() => { setMenuOpen(false); stopOuting(); }}
@@ -121,7 +133,7 @@ export default function Dashboard({ outing }) {
               </button>
               
               {!isTracking && tracks.length > 0 && (
-                <DataExporter tracks={tracks} notes={notes} recordings={recordings} />
+                <DataExporter tracks={tracks} notes={notes} recordings={recordings} photos={photos} generalNote={generalNote} />
               )}
             </div>
           )}

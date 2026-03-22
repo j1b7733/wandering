@@ -1,29 +1,44 @@
-let noSleepAudio = null;
+let wakeLock = null;
+let wakeLockVisibilityHandler = null;
 
-export function initNoSleep() {
-  if (noSleepAudio) return;
-  // Create a silent audio element to keep the WebView alive when the screen sleeps
-  noSleepAudio = new Audio();
-  // 1-second completely silent RIFF WAVE Base64
-  noSleepAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-  noSleepAudio.loop = true;
-  // Preload forces the browser to engage the media framework instantly
-  noSleepAudio.preload = 'auto';
-}
-
-export function startNoSleep() {
-  if (!noSleepAudio) initNoSleep();
-  
-  // Browsers require a gesture to trigger .play(). 
-  // Clicking "Start Event" counts as a gesture.
-  noSleepAudio.play().catch(e => {
-    console.warn("NoSleep silent audio failed to securely lock background execution:", e);
-  });
+export async function startNoSleep() {
+  if ('wakeLock' in navigator) {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      console.log('Wake Lock acquired');
+      
+      // Handle visibility changes to re-acquire wake lock if the app comes back to foreground
+      if (!wakeLockVisibilityHandler) {
+        wakeLockVisibilityHandler = async () => {
+          if (wakeLock !== null && document.visibilityState === 'visible') {
+            try {
+              wakeLock = await navigator.wakeLock.request('screen');
+              console.log('Wake Lock re-acquired on visibility change');
+            } catch (err) {
+               console.warn(`Wake Lock re-acquire failed: ${err.message}`);
+            }
+          }
+        };
+        document.addEventListener('visibilitychange', wakeLockVisibilityHandler);
+      }
+    } catch (err) {
+      console.warn(`Wake Lock failed: ${err.name}, ${err.message}`);
+    }
+  } else {
+    console.warn('Wake Lock API not supported in this browser.');
+  }
 }
 
 export function stopNoSleep() {
-  if (noSleepAudio) {
-    noSleepAudio.pause();
-    noSleepAudio.currentTime = 0;
+  if (wakeLock !== null) {
+    wakeLock.release().then(() => {
+      wakeLock = null;
+      console.log('Wake Lock released');
+    });
+  }
+  
+  if (wakeLockVisibilityHandler) {
+    document.removeEventListener('visibilitychange', wakeLockVisibilityHandler);
+    wakeLockVisibilityHandler = null;
   }
 }
