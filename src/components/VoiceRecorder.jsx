@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { VoiceRecorder as NativeVoiceRecorder } from 'capacitor-voice-recorder';
 
 export default function VoiceRecorder({ onSave }) {
   const [isRecording, setIsRecording] = useState(false);
@@ -21,9 +23,24 @@ export default function VoiceRecorder({ onSave }) {
   const startRecording = async () => {
     try {
       setErrorMsg('');
-      audioChunksRef.current = []; // Reset chunks
 
-      // Request ambient audio (echo cancellation optional since it's nature sounds, but standard is fine)
+      if (Capacitor.isNativePlatform()) {
+          const canRecord = await NativeVoiceRecorder.canDeviceVoiceRecord();
+          if (!canRecord.value) throw new Error("Device cannot voice record natively");
+
+          let hasPermission = await NativeVoiceRecorder.hasAudioRecordingPermission();
+          if (!hasPermission.value) {
+              hasPermission = await NativeVoiceRecorder.requestAudioRecordingPermission();
+          }
+          if (!hasPermission.value) throw new Error("Microphone permission denied.");
+
+          await NativeVoiceRecorder.startRecording();
+          setIsRecording(true);
+          return;
+      }
+
+      // Web Fallback
+      audioChunksRef.current = []; // Reset chunks
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
       // Attempt to find a supported codec for the current device (Android vs iOS vs Desktop)
@@ -52,14 +69,41 @@ export default function VoiceRecorder({ onSave }) {
 
     } catch (err) {
       console.error("Failed to start ambient recording:", err);
-      setErrorMsg("Please grant microphone permissions to record ambient audio.");
+      let errMsg = err.message || err.name || "Unknown microphone error";
+      setErrorMsg(`Error: ${errMsg}. Check app permissions in Android Settings.`);
     }
   };
 
-  const stopRecording = () => {
-    if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return;
-
+  const stopRecording = async () => {
+    if (!isRecording) return;
     setIsProcessing(true);
+
+    if (Capacitor.isNativePlatform()) {
+        try {
+            const result = await NativeVoiceRecorder.stopRecording();
+            if (result.value && result.value.recordDataBase64) {
+                const mimeType = result.value.mimeType || 'audio/aac';
+                const dataUrl = `data:${mimeType};base64,${result.value.recordDataBase64}`;
+                const response = await fetch(dataUrl);
+                const audioBlob = await response.blob();
+                await onSave(audioBlob, null);
+            } else {
+                 setErrorMsg("Recording failed: empty result");
+            }
+        } catch(err) {
+            console.error("Native stop error", err);
+            setErrorMsg("Failed to save native recording.");
+        } finally {
+            setIsRecording(false);
+            setIsProcessing(false);
+        }
+        return;
+    }
+
+    if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
+        setIsProcessing(false);
+        return;
+    }
     const recorder = mediaRecorderRef.current;
 
     // Listen for the final 'stop' event, which guarantees all data has been flushed via ondataavailable

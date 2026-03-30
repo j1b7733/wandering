@@ -1,3 +1,6 @@
+import { Capacitor, registerPlugin } from '@capacitor/core';
+const BackgroundGeolocation = registerPlugin('BackgroundGeolocation');
+
 // Haversine formula to calculate distance in miles
 export function calculateDistance(lat1, lon1, lat2, lon2) {
   const R = 3958.8; // Radius of the Earth in miles
@@ -40,43 +43,85 @@ export function getCurrentPosition(highAccuracy = true) {
   });
 }
 
-// Watch continuously with high accuracy (better for OS background management)
-export function startWatchingPosition(onSuccess, onError) {
-  if (!navigator.geolocation) {
-    if (onError) onError(new Error("Geolocation is not supported."));
-    return null;
-  }
-  
-  return navigator.geolocation.watchPosition(
-    (position) => {
-      onSuccess({
-        lat: position.coords.latitude,
-        lng: position.coords.longitude,
-        timestamp: position.timestamp,
-        accuracy: position.coords.accuracy
+// Watch continuously with high accuracy (supports background native services)
+export async function startWatchingPosition(onSuccess, onError) {
+  if (Capacitor.isNativePlatform()) {
+      return BackgroundGeolocation.addWatcher(
+          {
+              backgroundMessage: "Tracking your nature outing. Click here to return to Wandering Hillbilly.",
+              backgroundTitle: "Active Tracking",
+              requestPermissions: true,
+              stale: false,
+              distanceFilter: 10 // Trigger every 10 meters passively
+          },
+          function(location, error) {
+              if (error) {
+                  if (onError) onError(error);
+                  return;
+              }
+              onSuccess({
+                  lat: location.latitude,
+                  lng: location.longitude,
+                  timestamp: location.time,
+                  accuracy: location.accuracy || 10
+              });
+          }
+      ).catch(err => {
+          if (onError) onError(err);
+          return null;
       });
-    },
-    (error) => {
-      if (onError) onError(error);
-    },
-    { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
-  );
-}
-
-export function stopWatchingPosition(watchId) {
-  if (watchId !== null && navigator.geolocation) {
-    navigator.geolocation.clearWatch(watchId);
+  } else {
+      if (!navigator.geolocation) {
+        if (onError) onError(new Error("Geolocation is not supported."));
+        return null;
+      }
+      
+      const id = navigator.geolocation.watchPosition(
+        (position) => {
+          onSuccess({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            timestamp: position.timestamp,
+            accuracy: position.coords.accuracy
+          });
+        },
+        (error) => {
+          if (onError) onError(error);
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
+      );
+      return `web_${id}`;
   }
 }
 
-// Generate KML string from tracks and notes
-export function generateKML(tracks, notes, photos = [], startTime = null, generalNote = null) {
+export function stopWatchingPosition(watchIdWrapper) {
+  if (!watchIdWrapper) return;
+  if (typeof watchIdWrapper === 'string' && watchIdWrapper.startsWith('web_')) {
+      const id = parseInt(watchIdWrapper.replace('web_', ''), 10);
+      if (navigator.geolocation) {
+        navigator.geolocation.clearWatch(id);
+      }
+  } else if (Capacitor.isNativePlatform()) {
+      BackgroundGeolocation.removeWatcher({ id: watchIdWrapper });
+  }
+}
+
+// Generate KML string from ALL outing data
+export function generateKML(tracks, notes, photos = [], recordings = [], gear = {}, startTime = null, generalNote = null) {
+  
+  // Format gear into a readable string
+  let gearText = '';
+  if (Object.keys(gear).length > 0) {
+    gearText = '\n\nGear Used:\n' + Object.keys(gear).filter(k => gear[k]).map(k => '- ' + k.charAt(0).toUpperCase() + k.slice(1)).join('\n');
+  }
+
   let kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
     <name>Wandering Hillbilly Outing - ${new Date().toLocaleDateString()}</name>
     <description><![CDATA[Exported from Wandering Hillbilly Tracker
-${generalNote ? '\nGeneral Notes:\n' + generalNote : ''}]]></description>
+${generalNote ? '\nGeneral Notes:\n' + generalNote : ''}
+${gearText}]]></description>
 `;
 
   if (startTime) {
@@ -126,9 +171,13 @@ ${generalNote ? '\nGeneral Notes:\n' + generalNote : ''}]]></description>
   // Add photos
   photos.forEach((photo, index) => {
     const photoTime = photo.timestamp || photo.createdAt || (photo.exif?.dateTaken ? new Date(photo.exif.dateTaken).toISOString() : null) || startTime || null;
+    let imgSrc = photo.data || photo.dataUrl || photo.base64String;
+    if (imgSrc && (!imgSrc.startsWith('data:') && !imgSrc.startsWith('http'))) {
+        imgSrc = `data:image/jpeg;base64,${imgSrc}`;
+    }
     const descHtml = `<![CDATA[
         ${photo.text ? `<p>${photo.text}</p>` : ''}
-        <img src="${photo.data}" width="300" />
+        <img src="${imgSrc}" width="300" />
     ]]>`;
     kml += `
     <Placemark>
@@ -137,6 +186,26 @@ ${generalNote ? '\nGeneral Notes:\n' + generalNote : ''}]]></description>
       ${photoTime ? `<TimeStamp><when>${photoTime}</when></TimeStamp>` : ''}
       <Point>
         <coordinates>${photo.lng},${photo.lat},0</coordinates>
+      </Point>
+    </Placemark>
+`;
+  });
+
+  // Add audio recordings
+  recordings.forEach((rec, index) => {
+    const recTime = rec.timestamp || rec.createdAt || startTime || null;
+    let audioSrc = rec.data || rec.dataUrl || rec.base64String;
+    const descHtml = `<![CDATA[
+        ${rec.text ? `<p>${rec.text}</p>` : ''}
+        <audio controls="controls" src="${audioSrc}"></audio>
+    ]]>`;
+    kml += `
+    <Placemark>
+      <name>Audio Recording ${index + 1}</name>
+      <description>${descHtml}</description>
+      ${recTime ? `<TimeStamp><when>${recTime}</when></TimeStamp>` : ''}
+      <Point>
+        <coordinates>${rec.lng},${rec.lat},0</coordinates>
       </Point>
     </Placemark>
 `;

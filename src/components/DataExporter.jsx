@@ -1,11 +1,11 @@
 import React from 'react';
 import { generateKML } from '../utils/geo';
 
-export default function DataExporter({ tracks, notes, recordings, photos = [], generalNote = '' }) {
+export default function DataExporter({ tracks, notes, recordings, photos = [], generalNote = '', gear = {} }) {
   const handleExport = () => {
     // Generate KML XML string with explicit TimeStamp
     const startTime = tracks.length > 0 ? tracks[0].timestamp : new Date().toISOString();
-    const kmlContent = generateKML(tracks, notes, photos, startTime, generalNote);
+    const kmlContent = generateKML(tracks, notes, photos, recordings, gear, startTime, generalNote);
     
     // Create Blob and Download
     const blob = new Blob([kmlContent], { type: 'application/vnd.google-earth.kml+xml' });
@@ -19,10 +19,7 @@ export default function DataExporter({ tracks, notes, recordings, photos = [], g
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    // Provide alert regarding voice memos because KML does not easily bundle local audio blobs
-    if (recordings.length > 0) {
-      alert(`Exported KML with tracks and notes. Note: ${recordings.length} Voice memos cannot be directly embedded in the KML file without external hosting.`);
-    }
+    alert("Export successful! The KML file includes all tracks, photos, notes, audio, and gear information.");
   };
 
   return (

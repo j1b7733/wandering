@@ -7,9 +7,32 @@ export default function PhotoTaker({ onSave }) {
   
   const fileInputRef = useRef(null);
 
-  const handleCaptureClick = () => {
-      if (fileInputRef.current) {
-          fileInputRef.current.click();
+  const handleCaptureClick = async () => {
+      try {
+          const { Camera, CameraResultType, CameraSource } = await import('@capacitor/camera');
+          const image = await Camera.getPhoto({
+              quality: 70,
+              allowEditing: false,
+              resultType: CameraResultType.Base64,
+              source: CameraSource.Camera,
+              width: 1200
+          });
+          
+          if (image.base64String) {
+              const mime = image.format ? `image/${image.format}` : 'image/jpeg';
+              setPhotoData(`data:${mime};base64,${image.base64String}`);
+              setModalOpen(true);
+          } else {
+              alert("Debug: Camera opened but no Base64 data was returned from the native plugin.");
+          }
+      } catch (err) {
+          // Ignore cancellation errors gracefully, but alert actual failures
+          if (!err.message?.includes('User cancelled')) {
+              alert(`Debug Camera Error: ${err.message || JSON.stringify(err)}`);
+          }
+          if (fileInputRef.current) {
+              fileInputRef.current.click();
+          }
       }
   };
 

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getCurrentPosition, calculateDistance, fetchLocationName, startWatchingPosition, stopWatchingPosition } from '../utils/geo';
 import { saveOuting } from '../utils/storage';
-import { startNoSleep, stopNoSleep } from '../utils/nosleep';
 
 export function useOuting() {
   const [isTracking, setIsTracking] = useState(false);
@@ -146,15 +145,14 @@ export function useOuting() {
     const initialPos = await recordLocation(true);
     if (initialPos) handleNewPosition(initialPos);
     
-    // Initiate background Media lock to secure screen-off WebKit threads
-    startNoSleep();
-
     // Set up continuous native background watching instead of a manual interval
     if (trackingIntervalRef.current) stopWatchingPosition(trackingIntervalRef.current);
-    trackingIntervalRef.current = startWatchingPosition(
+    startWatchingPosition(
       (pos) => handleNewPosition(pos),
       (err) => console.warn("Background tracking error:", err)
-    );
+    ).then(id => {
+       trackingIntervalRef.current = id;
+    });
   };
 
   const stopOuting = async () => {
@@ -164,15 +162,17 @@ export function useOuting() {
       trackingIntervalRef.current = null;
     }
     
-    stopNoSleep();
-    
     // Final save to IDB
     await performAutosave();
   };
 
   const addNote = async (text) => {
-    // Force high accuracy for note pinning
-    const pos = await recordLocation(true);
+    // Try high accuracy, then loose accuracy, then last known track
+    let pos = await recordLocation(true);
+    if (!pos) pos = await recordLocation(false);
+    if (!pos && tracksRef.current.length > 0) pos = tracksRef.current[tracksRef.current.length - 1];
+    if (!pos) pos = { lat: 0, lng: 0 };
+    
     if (pos) {
       setNotes(prev => {
           const newNotes = [...prev, {
@@ -198,8 +198,12 @@ export function useOuting() {
   };
 
   const addRecording = async (audioBlob, transcription = null) => {
-    // Force high accuracy for voice memo pinning
-    const pos = await recordLocation(true);
+    // Try high accuracy, then loose accuracy, then last known track
+    let pos = await recordLocation(true);
+    if (!pos) pos = await recordLocation(false);
+    if (!pos && tracksRef.current.length > 0) pos = tracksRef.current[tracksRef.current.length - 1];
+    if (!pos) pos = { lat: 0, lng: 0 };
+    
     if (pos) {
         setRecordings(prev => {
             const newRecordings = [...prev, {
@@ -217,8 +221,12 @@ export function useOuting() {
   };
 
   const addPhoto = async (photoData, text = null) => {
-    // Force high accuracy for photo pinning
-    const pos = await recordLocation(true);
+    // Try high accuracy, then loose accuracy, then last known track
+    let pos = await recordLocation(true);
+    if (!pos) pos = await recordLocation(false);
+    if (!pos && tracksRef.current.length > 0) pos = tracksRef.current[tracksRef.current.length - 1];
+    if (!pos) pos = { lat: 0, lng: 0 };
+    
     if (pos) {
         setPhotos(prev => {
             const newPhotos = [...prev, {
@@ -257,13 +265,13 @@ export function useOuting() {
       // Use high accuracy since the user is actively holding their phone to hit Resume
       await recordLocation(true);
 
-      startNoSleep();
-
       if (trackingIntervalRef.current) stopWatchingPosition(trackingIntervalRef.current);
-      trackingIntervalRef.current = startWatchingPosition(
+      startWatchingPosition(
         (pos) => handleNewPosition(pos),
         (err) => console.warn("Background tracking error:", err)
-      );
+      ).then(id => {
+         trackingIntervalRef.current = id;
+      });
   };
 
   const updateGear = (newGear) => setGear(prev => ({...prev, ...newGear}));
